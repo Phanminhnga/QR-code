@@ -4,59 +4,1155 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ thống Quản lý & Tạo mã QR Tài liệu Google Drive</title>
+    <!-- Tailwind CSS CDN (Secure HTTPS) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Secure HTTPS) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons (Secure HTTPS) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QR Code Library (Secure HTTPS CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+    <!-- PapaParse for CSV parsing (Secure HTTPS CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
+    <!-- Firebase SDKs - COMPAT VERSION (Secure HTTPS CDN) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <style>body{font-family:'Inter',sans-serif;background-color:#f8fafc;}</style>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-area {
+                display: block !important;
+                background: white;
+            }
+            body {
+                background: white;
+            }
+        }
+    </style>
 </head>
 <body class="min-h-screen flex flex-col">
-    <!-- Header đã được giữ nguyên cấu trúc của bạn -->
-    <header class="bg-indigo-900 text-white shadow-lg"><div class="max-w-7xl mx-auto px-4 py-4"><h1 class="text-xl font-extrabold">QR DOC-HUB PRO</h1></div></header>
-    
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8">
-        <div id="sync-status" class="p-4 bg-yellow-100 rounded-lg">Đang khởi tạo kết nối...</div>
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="bg-indigo-900 text-white shadow-lg no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white p-2 rounded-lg text-indigo-900">
+                    <i class="fa-solid fa-qrcode text-3xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight">QR DOC-HUB PRO</h1>
+                    <p class="text-xs text-indigo-200">Hệ thống lưu trữ đám mây & tạo mã QR dùng chung</p>
+                </div>
+            </div>
+            
+            <nav class="flex space-x-2 bg-indigo-950/50 p-1.5 rounded-xl">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard-btn" class="px-4 py-2 rounded-lg text-sm font-medium transition duration-200 bg-white text-indigo-900 shadow-sm">
+                    <i class="fa-solid fa-chart-pie mr-1.5"></i>Bảng điều khiển
+                </button>
+                <button onclick="switchTab('manager')" id="tab-manager-btn" class="px-4 py-2 rounded-lg text-sm font-medium transition duration-200 text-indigo-100 hover:bg-indigo-800/50">
+                    <i class="fa-solid fa-list-check mr-1.5"></i>Quản lý tài liệu
+                </button>
+                <button onclick="switchTab('guide')" id="tab-guide-btn" class="px-4 py-2 rounded-lg text-sm font-medium transition duration-200 text-indigo-100 hover:bg-indigo-800/50">
+                    <i class="fa-solid fa-book-open mr-1.5"></i>Hướng dẫn quy trình
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- CLOUD SYNC STATE BAR -->
+    <div class="bg-indigo-50 border-b border-indigo-100 py-2 px-4 no-print">
+        <div class="max-w-7xl mx-auto flex items-center justify-between text-xs text-indigo-900 font-medium">
+            <div class="flex items-center space-x-2">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span id="sync-status">Đang kết nối cơ sở dữ liệu online...</span>
+            </div>
+            <div class="hidden sm:block">
+                <span>Mã thiết bị đám mây: </span><span id="user-id-display" class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 no-print">
+        
+        <!-- ALERT MESSAGE -->
+        <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transform transition-all duration-300 translate-y-10 opacity-0">
+            <span id="toast-icon" class="text-emerald-400"><i class="fa-solid fa-circle-check"></i></span>
+            <span id="toast-message" class="text-sm font-medium">Thông báo thành công</span>
+        </div>
+
+        <!-- ==================== TAB: DASHBOARD ==================== -->
+        <section id="tab-dashboard" class="space-y-8 animate-fade-in">
+            <!-- Hero section introduction -->
+            <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-3xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="space-y-3 max-w-2xl">
+                    <span class="bg-emerald-500/30 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Phiên bản 3.0.1 - Bảo mật HTTPS & Sửa lỗi ghi</span>
+                    <h2 class="text-2xl md:text-3xl font-bold">Quản lý & Thiết kế QR Dán Nhãn Tài liệu</h2>
+                    <p class="text-indigo-100 text-sm md:text-base leading-relaxed">
+                        Mọi thay đổi dữ liệu của bạn sẽ được tự động đồng bộ hóa lên đám mây online. Người khác chỉ cần truy cập vào đường link web là sẽ nhìn thấy toàn bộ danh sách và quét QR bình thường mà không lo mất dữ liệu.
+                    </p>
+                    <div class="flex flex-wrap gap-3 pt-2">
+                        <button onclick="document.getElementById('csv-file-input').click()" class="bg-white hover:bg-indigo-50 text-indigo-900 px-4 py-2.5 rounded-xl font-semibold text-sm transition shadow flex items-center">
+                            <i class="fa-solid fa-file-csv mr-2 text-lg text-emerald-600"></i> Nhập file DATA.xlsx (CSV)
+                        </button>
+                        <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+                        <button onclick="switchTab('guide')" class="bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500 px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center">
+                            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Xem cách đưa web lên mạng miễn phí
+                        </button>
+                    </div>
+                </div>
+                <!-- Stats grid -->
+                <div class="grid grid-cols-2 gap-4 w-full md:w-auto shrink-0">
+                    <div class="bg-white/10 backdrop-blur-md p-5 rounded-2xl border border-white/10 text-center min-w-[140px]">
+                        <span class="block text-3xl font-extrabold" id="stat-total-docs">0</span>
+                        <span class="text-xs text-indigo-200">Tổng tài liệu</span>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md p-5 rounded-2xl border border-white/10 text-center min-w-[140px]">
+                        <span class="block text-3xl font-extrabold text-emerald-300" id="stat-active-qrs">0</span>
+                        <span class="text-xs text-indigo-200">Đã có mã QR</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick CSV Upload Info & Preview -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left: Quick manual generator -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                    <h3 class="font-bold text-slate-800 text-lg flex items-center">
+                        <i class="fa-solid fa-circle-plus text-indigo-600 mr-2"></i>Thêm tài liệu nhanh
+                    </h3>
+                    <form id="add-doc-form" onsubmit="addDocumentManual(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Mã hóa chất / Mã tài liệu</label>
+                            <input type="text" id="doc-code" placeholder="Ví dụ: M4" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tên tài liệu / Tên hóa chất</label>
+                            <input type="text" id="doc-name" placeholder="Ví dụ: CAO SU THIÊN NHIÊN" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Đường dẫn Google Drive (PDF / Doc)</label>
+                            <input type="url" id="doc-link" placeholder="https://drive.google.com/file/d/..." class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            <span class="text-[10px] text-slate-400 block mt-1">Hệ thống tự động đồng bộ lên mạng ngay khi bạn nhấn Thêm.</span>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold text-sm transition shadow-sm">
+                            <i class="fa-solid fa-plus mr-1.5"></i>Thêm vào dữ liệu online
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right: QR customization and batch download -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800 text-lg flex items-center">
+                                <i class="fa-solid fa-sliders text-indigo-600 mr-2"></i>Cài đặt & Xuất mã QR hàng loạt
+                            </h3>
+                            <button onclick="resetDataToCloud()" class="text-xs text-rose-500 hover:text-rose-700 font-medium">
+                                <i class="fa-solid fa-trash-can mr-1"></i>Xóa sạch & Nạp lại dữ liệu gốc
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <!-- Color Selectors -->
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Màu mã QR</label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="color" id="qr-fg-color" value="#1e1b4b" onchange="updateQRSettings()" class="w-10 h-10 border-0 rounded cursor-pointer p-0">
+                                        <span class="text-xs text-slate-600 font-mono" id="qr-fg-val">#1E1B4B</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Kiểu nhãn dán bên dưới QR</label>
+                                    <select id="qr-label-type" onchange="updateQRSettings()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white outline-none">
+                                        <option value="both">Hiển thị cả Mã & Tên tài liệu</option>
+                                        <option value="code">Chỉ hiển thị Mã tài liệu</option>
+                                        <option value="name">Chỉ hiển thị Tên tài liệu</option>
+                                        <option value="none">Không hiển thị chữ</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- QR Preview and Sizes -->
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Màu nền QR</label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="color" id="qr-bg-color" value="#ffffff" onchange="updateQRSettings()" class="w-10 h-10 border-0 rounded cursor-pointer p-0">
+                                        <span class="text-xs text-slate-600 font-mono" id="qr-bg-val">#FFFFFF</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Độ sắc nét mã (Sửa lỗi)</label>
+                                    <select id="qr-error-level" onchange="updateQRSettings()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white outline-none">
+                                        <option value="H">Cực cao (H - 30% hư hỏng vẫn quét được)</option>
+                                        <option value="Q" selected>Cao (Q - 25% phục hồi)</option>
+                                        <option value="M">Trung bình (M - 15%)</option>
+                                        <option value="L">Thấp (L - 7%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-emerald-50 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-auto border border-emerald-100">
+                        <div class="space-y-1">
+                            <h4 class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i>Tự động đồng bộ liên tục</h4>
+                            <p class="text-xs text-emerald-700">Mọi chỉnh sửa của bạn từ điện thoại hay máy tính khác dùng chung link đều cập nhật tức thời.</p>
+                        </div>
+                        <button onclick="printQRCodes()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-print mr-2 text-base"></i> In hàng loạt nhãn dán
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List Quick Preview -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-lg">Xem nhanh mã QR</h3>
+                        <p class="text-xs text-slate-500">Danh sách các tài liệu đồng bộ từ Cloud</p>
+                    </div>
+                    <button onclick="switchTab('manager')" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 flex items-center">
+                        Đi tới trình quản lý chi tiết <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" id="dashboard-qr-grid">
+                    <!-- Cards will be generated by Javascript -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB: DATA MANAGER ==================== -->
+        <section id="tab-manager" class="hidden space-y-6 animate-fade-in">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+                <!-- Actions Bar -->
+                <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 pb-4 border-b border-slate-100">
+                    <div class="space-y-1">
+                        <h2 class="text-xl font-bold text-slate-800">Danh sách tài liệu & Liên kết PDF</h2>
+                        <p class="text-xs text-slate-500">Dữ liệu được lưu trữ trực tuyến giúp bảo mật và phòng tránh mất mát file.</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Search input -->
+                        <div class="relative min-w-[200px] md:min-w-[280px]">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                            </span>
+                            <input type="text" id="search-input" oninput="filterDocuments()" placeholder="Tìm kiếm theo mã, tên tài liệu..." class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                        </div>
+                        
+                        <!-- Actions button -->
+                        <button onclick="document.getElementById('csv-file-input').click()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center">
+                            <i class="fa-solid fa-file-excel mr-1.5 text-sm"></i>Nhập CSV
+                        </button>
+                        <button onclick="exportToCSV()" class="bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center">
+                            <i class="fa-solid fa-download mr-1.5 text-sm"></i>Xuất CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Content -->
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/75 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-100">
+                                <th class="py-4 px-6 text-center w-16">STT</th>
+                                <th class="py-4 px-6 w-28">Mã HC/Tài liệu</th>
+                                <th class="py-4 px-6">Tên tài liệu / Tên chất</th>
+                                <th class="py-4 px-6">Trạng thái Link Google Drive</th>
+                                <th class="py-4 px-6 text-center w-36">Mã QR</th>
+                                <th class="py-4 px-6 text-right w-44">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manager-table-body" class="divide-y divide-slate-100 text-sm text-slate-700">
+                            <!-- JavaScript will generate rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB: GUIDE & PROCESS ==================== -->
+        <section id="tab-guide" class="hidden space-y-6 animate-fade-in">
+            <!-- Instructions Cards -->
+            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                <div class="border-b border-slate-100 pb-4">
+                    <h2 class="text-2xl font-bold text-slate-800">Quy trình đưa trang web này lên mạng internet MIỄN PHÍ</h2>
+                    <p class="text-sm text-slate-500 mt-1">Để đồng nghiệp và mọi người có thể truy cập, sửa đổi link hóa chất từ mọi nơi, bạn cần đưa trang web này lên mạng thay vì chạy file trên máy tính.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Step 1 GitHub -->
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-3">
+                        <div class="flex items-center space-x-3">
+                            <span class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">A</span>
+                            <h3 class="font-bold text-slate-800 text-base">Giải pháp nhanh nhất: Vercel hoặc Netlify</h3>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Đây là hai nền tảng lưu trữ trang web miễn phí phổ biến nhất hiện nay, chỉ mất 1 phút để chạy trang web online:
+                        </p>
+                        <ul class="text-xs text-slate-500 list-disc list-inside space-y-1.5 pl-2">
+                            <li><strong>Bước 1:</strong> Truy cập <a href="https://vercel.com" target="_blank" class="text-indigo-600 underline font-medium">vercel.com</a> hoặc <a href="https://www.netlify.com" target="_blank" class="text-indigo-600 underline font-medium">netlify.com</a> và đăng ký tài khoản miễn phí.</li>
+                            <li><strong>Bước 2:</strong> Đổi tên tệp tin ứng dụng của bạn từ <code class="bg-slate-200 px-1 py-0.5 rounded">app.html</code> thành <strong><code class="bg-slate-200 px-1 py-0.5 rounded">index.html</code></strong>.</li>
+                            <li><strong>Bước 3:</strong> Kéo và thả tệp tin <code class="bg-slate-200 px-1 py-0.5 rounded">index.html</code> này vào khu vực tải lên dự án mới (Drag and drop) trên Netlify/Vercel.</li>
+                            <li><strong>Bước 4:</strong> Nền tảng sẽ cấp cho bạn một đường dẫn tuyệt đẹp có dạng <code class="text-indigo-600 font-mono">https://ten-du-an.vercel.app</code>. Gửi link này cho đồng nghiệp sử dụng!</li>
+                        </ul>
+                    </div>
+
+                    <!-- Step 2 GitHub Pages -->
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-3">
+                        <div class="flex items-center space-x-3">
+                            <span class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">B</span>
+                            <h3 class="font-bold text-slate-800 text-base">Giải pháp thứ hai: GitHub Pages</h3>
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Hoàn toàn miễn phí trọn đời thuộc hệ thống của Microsoft:
+                        </p>
+                        <ul class="text-xs text-slate-500 list-disc list-inside space-y-1.5 pl-2">
+                            <li><strong>Bước 1:</strong> Tạo tài khoản trên <a href="https://github.com" target="_blank" class="text-indigo-600 underline font-medium">github.com</a>.</li>
+                            <li><strong>Bước 2:</strong> Tạo một kho lưu trữ mới (Repository) với tên bất kỳ và chuyển sang trạng thái <strong>Public (Công khai)</strong>.</li>
+                            <li><strong>Bước 3:</strong> Tải tệp tin <code class="bg-slate-200 px-1 py-0.5 rounded">index.html</code> lên đó.</li>
+                            <li><strong>Bước 4:</strong> Vào mục <strong>Settings -> Pages</strong>, tại phần Build and deployment chọn Source là <strong>Deploy from a branch</strong>, chọn branch là <strong>main</strong> và ấn Save. Link truy cập của bạn sẽ xuất hiện sau vài giây!</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex items-start space-x-3.5">
+                    <span class="text-amber-600 text-xl mt-0.5"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    <div class="space-y-1">
+                        <h4 class="font-bold text-amber-950 text-sm">Vấn đề bảo mật tài liệu hóa chất</h4>
+                        <p class="text-xs text-amber-800 leading-relaxed">
+                            Dữ liệu hóa chất của bạn đã được lưu trữ trên hệ thống đám mây bảo mật. Tuy nhiên, bất kỳ ai có đường link trang web của bạn đều có thể thêm, sửa, hoặc xóa các tệp tin. Do đó hãy chỉ chia sẻ link quản lý trang web này cho nhân sự có trách nhiệm trong công ty của bạn.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
-    <script>
-        // Cấu hình Firebase từ biến hệ thống
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    <!-- PRINT VIEW AREA (HIDDEN IN SCREEN MODE, DISPLAYED IN PRINT MODE) -->
+    <div id="print-area" class="hidden print-area p-8">
+        <div class="text-center mb-6 no-print-element pb-4 border-b">
+            <h1 class="text-2xl font-bold text-slate-800">DANH SÁCH MÃ QR TÀI LIỆU SẢN XUẤT - HOÁ CHẤT</h1>
+            <p class="text-xs text-slate-500">Vui lòng sử dụng điện thoại quét mã QR để truy cập xem hướng dẫn tài liệu chi tiết.</p>
+        </div>
         
-        window.addEventListener('DOMContentLoaded', async () => {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-            const auth = firebase.auth();
-            const db = firebase.firestore();
-            const statusDiv = document.getElementById('sync-status');
+        <!-- The Grid of QRs inside Print Mode -->
+        <div class="grid grid-cols-4 gap-6 text-center" id="print-qr-grid">
+            <!-- Generated dynamically -->
+        </div>
+    </div>
 
-            try {
-                // Rule: Auth trước khi query
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await auth.signInWithCustomToken(__initial_auth_token);
-                } else {
-                    await auth.signInAnonymously();
-                }
+    <!-- FOOTER -->
+    <footer class="bg-slate-900 text-slate-400 py-6 border-t border-slate-800 mt-auto no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+            <p>&copy; 2026 QR DOC-HUB PRO. Hỗ trợ hệ thống cơ sở dữ liệu thời gian thực.</p>
+            <p>Hỗ trợ đầy đủ định dạng CSV từ Microsoft Excel.</p>
+        </div>
+    </footer>
+
+    <!-- MODAL EDIT/UPDATE DOCUMENT -->
+    <div id="edit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b">
+                <h3 class="font-bold text-slate-800 text-lg">Cập nhật tài liệu</h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="saveEditModal(event)" class="space-y-4">
+                <input type="hidden" id="edit-index">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Mã hóa chất / Mã tài liệu</label>
+                    <input type="text" id="edit-code" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Tên tài liệu / Tên hóa chất</label>
+                    <input type="text" id="edit-name" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Đường dẫn Google Drive (PDF / Doc)</label>
+                    <input type="url" id="edit-link" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                </div>
                 
-                statusDiv.innerText = "Đã kết nối thành công!";
-                statusDiv.className = "p-4 bg-emerald-100 text-emerald-800 rounded-lg";
-                
-                // Bạn có thể tiếp tục các hàm query dữ liệu tại đây...
-                console.log("System initialized successfully");
-                
-            } catch (error) {
-                statusDiv.innerText = "Lỗi kết nối: " + error.message;
-                statusDiv.className = "p-4 bg-red-100 text-red-800 rounded-lg";
-            }
+                <div class="flex items-center justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition">Hủy bỏ</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">Lưu lên đám mây</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Default Backup Data (For resetting purposes)
+        const DEFAULT_DOCUMENTS = [
+            { code: "M1", name: "TALC", link: "https://docs.google.com/document/d/1z52a55UsNEzpse5ECbMIOSWHyMO4GwS0/edit?usp=drive_link&ouid=114179445151289483266&rtpof=true&sd=true" },
+            { code: "M2", name: "6PPD", link: "https://docs.google.com/document/d/1yyYkFG0HtQBA1NH0HZyOsWrleUxplSFR/edit?usp=drive_link&ouid=114179445151289483266&rtpof=true&sd=true" },
+            { code: "M3", name: "TMQ", link: "" },
+            { code: "M4", name: "Tên Hóa Chất M4", link: "" }
+        ];
+
+        let documents = [];
+
+        // QR Customization State
+        let qrSettings = {
+            fgColor: "#1e1b4b",
+            bgColor: "#ffffff",
+            labelType: "both",
+            errorLevel: "Q"
+        };
+
+        // App ID and Firebase variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-qr-app';
+        let db;
+        let auth;
+        let userId = "";
+
+        // On Page Load
+        window.addEventListener('DOMContentLoaded', async () => {
+            initFirebase();
         });
 
-        // Hàm chuyển tab
+        // Initialize Firebase connection using environment config safely (HTTPS COMPATIBLE)
+        async function initFirebase() {
+            try {
+                if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+                    throw new Error("Missing system __firebase_config provider.");
+                }
+
+                const firebaseConfig = JSON.parse(__firebase_config);
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+
+                document.getElementById('sync-status').innerText = "Đang kết nối cơ sở dữ liệu online...";
+                
+                // Rule 3: Auth Before Queries (MANDATORY)
+                let user;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const credentials = await auth.signInWithCustomToken(__initial_auth_token);
+                    user = credentials.user;
+                } else {
+                    const credentials = await auth.signInAnonymously();
+                    user = credentials.user;
+                }
+
+                userId = user.uid;
+                document.getElementById('user-id-display').innerText = userId;
+                document.getElementById('sync-status').innerText = "Đã kết nối cơ sở dữ liệu online thành công!";
+                
+                // Load data after successful authentication
+                listenToCloudData();
+
+            } catch (error) {
+                console.error("Firebase init failed, switching to local backup storage mode", error);
+                document.getElementById('sync-status').innerText = "Không thể kết nối Cloud. Đang chạy offline.";
+                document.getElementById('sync-status').classList.add("text-rose-600");
+                
+                // Fallback to local storage if cloud is blocked
+                const stored = localStorage.getItem('qr_doc_hub_docs');
+                if (stored) {
+                    documents = JSON.parse(stored);
+                } else {
+                    documents = DEFAULT_DOCUMENTS.map((d, index) => ({ id: `local-${index}`, stt: index + 1, ...d }));
+                }
+                renderApp();
+            }
+        }
+
+        // Rule 1: STRICT Firestore Path Structure
+        // Public Collection Path: collection(db, 'artifacts', appId, 'public', 'data', collectionName)
+        function listenToCloudData() {
+            if (!auth.currentUser) return;
+
+            const documentsCollection = db.collection('artifacts')
+                                          .doc(appId)
+                                          .collection('public')
+                                          .doc('data')
+                                          .collection('documents');
+            
+            // Realtime Sync using simple query
+            documentsCollection.onSnapshot((querySnapshot) => {
+                let items = [];
+                querySnapshot.forEach((doc) => {
+                    items.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Rule 2: Sort in Javascript memory to avoid compound index errors
+                items.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+
+                documents = items;
+
+                // Seed default values if Firestore is empty
+                if (documents.length === 0) {
+                    seedDefaultDataToCloud();
+                } else {
+                    renderApp();
+                }
+            }, (error) => {
+                console.error("Firestore listening error: ", error);
+                showToast("Lỗi tải cơ sở dữ liệu từ Cloud.", true);
+            });
+        }
+
+        // Seed default dataset if Cloud database is blank
+        async function seedDefaultDataToCloud() {
+            if (!auth.currentUser) return;
+
+            const batch = db.batch();
+            const collectionRef = db.collection('artifacts')
+                                    .doc(appId)
+                                    .collection('public')
+                                    .doc('data')
+                                    .collection('documents');
+
+            DEFAULT_DOCUMENTS.forEach((doc, index) => {
+                const newDocRef = collectionRef.doc();
+                batch.set(newDocRef, {
+                    stt: index + 1,
+                    code: doc.code,
+                    name: doc.name,
+                    link: doc.link
+                });
+            });
+
+            try {
+                await batch.commit();
+                showToast("Đã khởi tạo cơ sở dữ liệu mẫu thành công!");
+            } catch (err) {
+                console.error("Failed to seed database: ", err);
+            }
+        }
+
+        // Clean and Seed Data from UI Button
+        async function resetDataToCloud() {
+            if (!auth.currentUser) {
+                showToast("Vui lòng đợi kết nối cơ sở dữ liệu thành công.", true);
+                return;
+            }
+
+            if (confirm("Bạn có chắc muốn xóa toàn bộ và khôi phục về danh mục dữ liệu mẫu (M1-M4) lên Cloud?")) {
+                document.getElementById('sync-status').innerText = "Đang dọn dẹp cơ sở dữ liệu cũ...";
+                
+                const collectionRef = db.collection('artifacts')
+                                        .doc(appId)
+                                        .collection('public')
+                                        .doc('data')
+                                        .collection('documents');
+                                        
+                try {
+                    const snapshot = await collectionRef.get();
+                    const batch = db.batch();
+                    snapshot.docs.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+
+                    // Seed again
+                    await seedDefaultDataToCloud();
+                    showToast("Đã thiết lập lại dữ liệu đám mây!");
+                } catch (err) {
+                    console.error("Reset data error: ", err);
+                    showToast("Lỗi kết nối khi dọn dẹp.", true);
+                }
+            }
+        }
+
+        // Show Toast Notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            if (isError) {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500"></i>';
+            } else {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+            }
+
+            toast.classList.remove('hidden', 'translate-y-10', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        // Tab Switch Logic
         function switchTab(tabId) {
-            console.log("Switched to:", tabId);
+            const tabs = ['dashboard', 'manager', 'guide'];
+            tabs.forEach(tab => {
+                const element = document.getElementById(`tab-${tab}`);
+                const btn = document.getElementById(`tab-${tab}-btn`);
+                
+                if (tab === tabId) {
+                    element.classList.remove('hidden');
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-medium transition duration-200 bg-white text-indigo-900 shadow-sm";
+                } else {
+                    element.classList.add('hidden');
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-medium transition duration-200 text-indigo-100 hover:bg-indigo-800/50";
+                }
+            });
+        }
+
+        // Utility: Convert standard Google Drive link to optimize direct visual access (Secure Preview Format)
+        function optimizeDriveLink(url) {
+            if (!url) return "";
+            
+            const docIdMatch = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+            const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+            const openIdMatch = url.match(/id=([a-zA-Z0-9-_]+)/);
+
+            let fileId = null;
+            let type = "file"; 
+
+            if (docIdMatch) {
+                fileId = docIdMatch[1];
+                type = "document";
+            } else if (fileIdMatch) {
+                fileId = fileIdMatch[1];
+                type = "file";
+            } else if (openIdMatch) {
+                fileId = openIdMatch[1];
+                type = "file";
+            }
+
+            if (fileId) {
+                if (type === "document") {
+                    return `https://docs.google.com/document/d/${fileId}/preview`; 
+                } else {
+                    return `https://drive.google.com/file/d/${fileId}/preview`; 
+                }
+            }
+
+            return url; 
+        }
+
+        // CSV Upload Handler to Cloud
+        async function handleCSVUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: async function(results) {
+                    const data = results.data;
+                    if (data.length === 0) {
+                        showToast("File CSV rỗng hoặc định dạng không đúng", true);
+                        return;
+                    }
+
+                    document.getElementById('sync-status').innerText = "Đang nạp danh sách lên mây...";
+
+                    const collectionRef = db.collection('artifacts')
+                                            .doc(appId)
+                                            .collection('public')
+                                            .doc('data')
+                                            .collection('documents');
+                    const batch = db.batch();
+
+                    data.forEach((row, index) => {
+                        const code = row['Mã HC'] || row['Ma HC'] || row['Mã'] || row['Code'] || "";
+                        const name = row['Tên tài liệu'] || row['Ten tai lieu'] || row['Tên'] || row['Name'] || "";
+                        const link = row['Link PDF'] || row['Link'] || row['URL'] || row['Link Google Drive'] || "";
+                        
+                        if (code.trim() || name.trim()) {
+                            const newDocRef = collectionRef.doc();
+                            batch.set(newDocRef, {
+                                stt: parseInt(row['STT']) || (index + 1),
+                                code: code.trim(),
+                                name: name.trim(),
+                                link: link.trim()
+                            });
+                        }
+                    });
+
+                    try {
+                        await batch.commit();
+                        showToast(`Đã lưu thành công danh sách lên hệ thống Cloud!`);
+                    } catch (err) {
+                        console.error("Batch CSV commit failed: ", err);
+                        showToast("Lỗi khi tải tệp CSV lên Cloud", true);
+                    }
+                },
+                error: function(err) {
+                    showToast("Lỗi khi đọc file CSV: " + err.message, true);
+                }
+            });
+            event.target.value = "";
+        }
+
+        // Export data back to CSV
+        function exportToCSV() {
+            let csvContent = "STT,Mã HC,Tên tài liệu,Link PDF,QR\r\n";
+            documents.forEach(doc => {
+                const escapedName = doc.name.replace(/"/g, '""');
+                csvContent += `${doc.stt || ""},"${doc.code || ""}","${escapedName}","${doc.link || ""}",\r\n`;
+            });
+
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "DANH_SACH_MA_QR.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Xuất file CSV thành công!");
+        }
+
+        // Add Manual Document directly to Cloud (Ensuring strict paths)
+        async function addDocumentManual(event) {
+            event.preventDefault();
+            const codeInput = document.getElementById('doc-code');
+            const nameInput = document.getElementById('doc-name');
+            const linkInput = document.getElementById('doc-link');
+
+            const nextStt = documents.length > 0 ? Math.max(...documents.map(d => d.stt || 0)) + 1 : 1;
+
+            const docData = {
+                stt: nextStt,
+                code: codeInput.value.trim(),
+                name: nameInput.value.trim(),
+                link: linkInput.value.trim()
+            };
+
+            try {
+                await db.collection('artifacts')
+                        .doc(appId)
+                        .collection('public')
+                        .doc('data')
+                        .collection('documents')
+                        .add(docData);
+                        
+                showToast(`Đã đồng bộ hoá chất "${docData.name}" online!`);
+                
+                // Clear inputs
+                codeInput.value = "";
+                nameInput.value = "";
+                linkInput.value = "";
+            } catch (e) {
+                showToast("Lưu thất bại. Vui lòng kiểm tra kết nối mạng.", true);
+            }
+        }
+
+        // Delete Document from Cloud
+        async function deleteDocument(index) {
+            const doc = documents[index];
+            if (confirm(`Bạn có chắc muốn xóa hóa chất [${doc.code}] ${doc.name} khỏi Cloud?`)) {
+                try {
+                    await db.collection('artifacts')
+                            .doc(appId)
+                            .collection('public')
+                            .doc('data')
+                            .collection('documents')
+                            .doc(doc.id)
+                            .delete();
+                    showToast("Đã xóa hoàn tất.");
+                } catch (e) {
+                    showToast("Lỗi xóa cơ sở dữ liệu.", true);
+                }
+            }
+        }
+
+        // Modal Edit Logic
+        function openEditModal(index) {
+            const doc = documents[index];
+            document.getElementById('edit-index').value = index;
+            document.getElementById('edit-id').value = doc.id;
+            document.getElementById('edit-code').value = doc.code;
+            document.getElementById('edit-name').value = doc.name;
+            document.getElementById('edit-link').value = doc.link;
+
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+        }
+
+        // Save Edit Modal to Cloud (Updating correctly)
+        async function saveEditModal(event) {
+            event.preventDefault();
+            const index = parseInt(document.getElementById('edit-index').value);
+            const docId = document.getElementById('edit-id').value;
+            const code = document.getElementById('edit-code').value.trim();
+            const name = document.getElementById('edit-name').value.trim();
+            const link = document.getElementById('edit-link').value.trim();
+
+            try {
+                await db.collection('artifacts')
+                        .doc(appId)
+                        .collection('public')
+                        .doc('data')
+                        .collection('documents')
+                        .doc(docId)
+                        .update({
+                            code: code,
+                            name: name,
+                            link: link
+                        });
+                showToast("Cập nhật dữ liệu đám mây thành công!");
+                closeEditModal();
+            } catch (e) {
+                showToast("Lưu chỉnh sửa thất bại.", true);
+            }
+        }
+
+        // Update QR Custom Settings
+        function updateQRSettings() {
+            qrSettings.fgColor = document.getElementById('qr-fg-color').value;
+            qrSettings.bgColor = document.getElementById('qr-bg-color').value;
+            qrSettings.labelType = document.getElementById('qr-label-type').value;
+            qrSettings.errorLevel = document.getElementById('qr-error-level').value;
+
+            // Update text displays
+            document.getElementById('qr-fg-val').innerText = qrSettings.fgColor.toUpperCase();
+            document.getElementById('qr-bg-val').innerText = qrSettings.bgColor.toUpperCase();
+
+            renderApp();
+        }
+
+        // Filter search logic
+        function filterDocuments() {
+            const val = document.getElementById('search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#manager-table-body tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (text.includes(val)) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+        }
+
+        // Generate QR Code Content Helper (HTTPS Compatible)
+        function generateQRCodeCanvas(text, canvasId, labelText = "") {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            if (!text) {
+                // Draw a clean crossed warning pattern if link is missing
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#f8fafc";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = "#cbd5e1";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(10, 10);
+                ctx.lineTo(canvas.width - 10, canvas.height - 10);
+                ctx.moveTo(canvas.width - 10, 10);
+                ctx.lineTo(10, canvas.height - 10);
+                ctx.stroke();
+                
+                ctx.fillStyle = "#ef4444";
+                ctx.font = "bold 12px Inter";
+                ctx.textAlign = "center";
+                ctx.fillText("Chưa có link", canvas.width / 2, canvas.height / 2 + 5);
+                return;
+            }
+
+            const finalURL = optimizeDriveLink(text);
+
+            QRCode.toCanvas(canvas, finalURL, {
+                width: 160,
+                margin: 2,
+                color: {
+                    dark: qrSettings.fgColor,
+                    light: qrSettings.bgColor
+                },
+                errorCorrectionLevel: qrSettings.errorLevel
+            }, function (error) {
+                if (error) console.error(error);
+            });
+        }
+
+        // Download single QR Code Image (Secure High-Res Export)
+        function downloadSingleQR(index) {
+            const doc = documents[index];
+            if (!doc.link) {
+                showToast("Vui lòng bổ sung link Drive để tải QR!", true);
+                return;
+            }
+
+            const tempCanvas = document.createElement('canvas');
+            const ctx = tempCanvas.getContext('2d');
+
+            tempCanvas.width = 400;
+            tempCanvas.height = 480;
+
+            ctx.fillStyle = qrSettings.bgColor;
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            const tempQRCanvas = document.createElement('canvas');
+            const finalURL = optimizeDriveLink(doc.link);
+
+            QRCode.toCanvas(tempQRCanvas, finalURL, {
+                width: 360,
+                margin: 2,
+                color: {
+                    dark: qrSettings.fgColor,
+                    light: qrSettings.bgColor
+                },
+                errorCorrectionLevel: 'H' 
+            }, function (error) {
+                if (error) {
+                    showToast("Lỗi khi tạo hình ảnh tải xuống.", true);
+                    return;
+                }
+
+                ctx.drawImage(tempQRCanvas, 20, 20, 360, 360);
+                ctx.fillStyle = qrSettings.fgColor;
+                ctx.textAlign = "center";
+                
+                if (qrSettings.labelType === "both") {
+                    ctx.font = "bold 24px Inter";
+                    ctx.fillText(doc.code, 200, 410);
+                    ctx.font = "500 20px Inter";
+                    ctx.fillText(doc.name, 200, 445);
+                } else if (qrSettings.labelType === "code") {
+                    ctx.font = "bold 26px Inter";
+                    ctx.fillText(doc.code, 200, 425);
+                } else if (qrSettings.labelType === "name") {
+                    ctx.font = "bold 24px Inter";
+                    ctx.fillText(doc.name, 200, 425);
+                }
+
+                const image = tempCanvas.toDataURL("image/png");
+                const link = document.createElement('a');
+                link.download = `QR_${doc.code || 'DOC'}_${doc.name}.png`;
+                link.href = image;
+                link.click();
+                showToast("Đã tải tệp QR PNG xuống máy!");
+            });
+        }
+
+        // Print QR Codes Action
+        function printQRCodes() {
+            const printGrid = document.getElementById('print-qr-grid');
+            printGrid.innerHTML = "";
+
+            let hasValidQRs = false;
+
+            documents.forEach((doc, idx) => {
+                if (!doc.link) return; 
+                hasValidQRs = true;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = "flex flex-col items-center justify-center p-4 border border-dashed border-slate-300 rounded-lg bg-white break-inside-avoid";
+
+                const canvasId = `print-canvas-${idx}`;
+                const canvas = document.createElement('canvas');
+                canvas.id = canvasId;
+                canvas.width = 180;
+                canvas.height = 180;
+                canvas.className = "mx-auto mb-3";
+
+                wrapper.appendChild(canvas);
+
+                const labelText = document.createElement('div');
+                labelText.className = "space-y-1";
+                
+                if (qrSettings.labelType === "both" || qrSettings.labelType === "code") {
+                    const codeEl = document.createElement('p');
+                    codeEl.className = "font-extrabold text-sm text-slate-900 uppercase";
+                    codeEl.innerText = doc.code;
+                    labelText.appendChild(codeEl);
+                }
+
+                if (qrSettings.labelType === "both" || qrSettings.labelType === "name") {
+                    const nameEl = document.createElement('p');
+                    nameEl.className = "text-xs text-slate-600 font-semibold";
+                    nameEl.innerText = doc.name;
+                    labelText.appendChild(nameEl);
+                }
+
+                wrapper.appendChild(labelText);
+                printGrid.appendChild(wrapper);
+
+                setTimeout(() => {
+                    generateQRCodeCanvas(doc.link, canvasId);
+                }, 50);
+            });
+
+            if (!hasValidQRs) {
+                showToast("Không tìm thấy hóa chất nào đã gắn link Drive để in!", true);
+                return;
+            }
+
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        }
+
+        // RENDER CENTRAL FUNCTION
+        function renderApp() {
+            // Update Stats
+            document.getElementById('stat-total-docs').innerText = documents.length;
+            document.getElementById('stat-active-qrs').innerText = documents.filter(d => d.link).length;
+
+            // RENDER TAB: DASHBOARD QUICK VIEW
+            const dashGrid = document.getElementById('dashboard-qr-grid');
+            dashGrid.innerHTML = "";
+
+            if (documents.length === 0) {
+                dashGrid.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-slate-400">
+                        <i class="fa-solid fa-cloud-arrow-down text-4xl mb-3 block text-slate-300 animate-pulse"></i>
+                        Đang đồng bộ hóa dữ liệu từ Cloud...
+                    </div>
+                `;
+            } else {
+                documents.forEach((doc, idx) => {
+                    const card = document.createElement('div');
+                    card.className = "bg-slate-50 border border-slate-100 p-5 rounded-2xl text-center space-y-4 hover:shadow-md transition duration-200 flex flex-col justify-between";
+
+                    const canvasId = `dash-qr-${idx}`;
+
+                    let labelString = "";
+                    if (qrSettings.labelType === "both") labelString = `[${doc.code}] ${doc.name}`;
+                    else if (qrSettings.labelType === "code") labelString = doc.code;
+                    else if (qrSettings.labelType === "name") labelString = doc.name;
+
+                    card.innerHTML = `
+                        <div class="space-y-1">
+                            <span class="bg-indigo-100 text-indigo-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider inline-block mb-1">${doc.code || 'No Code'}</span>
+                            <h4 class="font-bold text-slate-800 text-sm truncate" title="${doc.name}">${doc.name}</h4>
+                        </div>
+                        
+                        <div class="bg-white p-3 rounded-xl inline-block mx-auto border border-slate-100">
+                            <canvas id="${canvasId}" class="w-28 h-28 mx-auto"></canvas>
+                        </div>
+
+                        <div class="pt-2 flex justify-center space-x-1">
+                            ${doc.link ? `
+                                <button onclick="downloadSingleQR(${idx})" class="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition flex-1 flex items-center justify-center" title="Tải ảnh QR">
+                                    <i class="fa-solid fa-download mr-1"></i> Tải QR
+                                </button>
+                                <a href="${optimizeDriveLink(doc.link)}" target="_blank" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs transition flex items-center justify-center" title="Mở Drive PDF">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+                            ` : `
+                                <button onclick="openEditModal(${idx})" class="py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition w-full flex items-center justify-center">
+                                    <i class="fa-solid fa-link-slash mr-1"></i> Gắn link Drive
+                                </button>
+                            `}
+                        </div>
+                    `;
+
+                    dashGrid.appendChild(card);
+
+                    setTimeout(() => {
+                        generateQRCodeCanvas(doc.link, canvasId, labelString);
+                    }, 50);
+                });
+            }
+
+            // RENDER TAB: DATA MANAGER TABLE
+            const tableBody = document.getElementById('manager-table-body');
+            tableBody.innerHTML = "";
+
+            if (documents.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-10 text-center text-slate-400">
+                            <i class="fa-solid fa-box-open text-3xl mb-2 block text-slate-300"></i>
+                            Đang tải cơ sở dữ liệu...
+                        </td>
+                    </tr>
+                `;
+            } else {
+                documents.forEach((doc, idx) => {
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-slate-50/50 transition duration-150";
+
+                    const iconStatus = doc.link 
+                        ? `<span class="inline-flex items-center text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full"><i class="fa-solid fa-circle-check mr-1.5 text-[10px] text-emerald-500"></i>Có Link PDF</span>`
+                        : `<span class="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full"><i class="fa-solid fa-triangle-exclamation mr-1.5 text-[10px] text-amber-500"></i>Thiếu Link PDF</span>`;
+
+                    const miniCanvasId = `table-qr-${idx}`;
+
+                    row.innerHTML = `
+                        <td class="py-4 px-6 text-center font-semibold text-slate-400">${doc.stt || (idx + 1)}</td>
+                        <td class="py-4 px-6 font-bold text-slate-900">${doc.code || '---'}</td>
+                        <td class="py-4 px-6 font-medium text-slate-700">${doc.name}</td>
+                        <td class="py-4 px-6">
+                            <div class="space-y-1">
+                                <div>${iconStatus}</div>
+                                ${doc.link ? `<div class="text-slate-400 font-mono text-[10px] truncate max-w-xs" title="${doc.link}">${doc.link}</div>` : ''}
+                            </div>
+                        </td>
+                        <td class="py-4 px-6 text-center">
+                            <div class="bg-white p-1 rounded border border-slate-100 inline-block">
+                                <canvas id="${miniCanvasId}" class="w-12 h-12"></canvas>
+                            </div>
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <div class="flex items-center justify-end space-x-1.5">
+                                <button onclick="openEditModal(${idx})" class="p-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 transition" title="Sửa thông tin">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                ${doc.link ? `
+                                    <button onclick="downloadSingleQR(${idx})" class="p-2 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg text-slate-600 transition" title="Tải QR ảnh PNG">
+                                        <i class="fa-solid fa-download"></i>
+                                    </button>
+                                ` : ''}
+                                <button onclick="deleteDocument(${idx})" class="p-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 rounded-lg text-slate-600 transition" title="Xóa tài liệu">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+
+                    tableBody.appendChild(row);
+
+                    setTimeout(() => {
+                        generateQRCodeCanvas(doc.link, miniCanvasId);
+                    }, 50);
+                });
+            }
         }
     </script>
 </body>
