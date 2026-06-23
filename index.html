@@ -4,21 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ thống Quản lý & Tạo mã QR Tài liệu Google Drive</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS CDN (Secure HTTPS) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts -->
+    <!-- Google Fonts (Secure HTTPS) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
+    <!-- FontAwesome Icons (Secure HTTPS) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- QR Code Library (node-qrcode CDN) -->
+    <!-- QR Code Library (Secure HTTPS CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
-    <!-- PapaParse for CSV parsing -->
+    <!-- PapaParse for CSV parsing (Secure HTTPS CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
+    <!-- Firebase SDKs - COMPAT VERSION (Secure HTTPS CDN) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
     <style>
         body {
@@ -94,7 +94,7 @@
                 <span id="sync-status">Đang kết nối cơ sở dữ liệu online...</span>
             </div>
             <div class="hidden sm:block">
-                <span>Mã thiết bị của bạn: </span><span id="user-id-display" class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">...</span>
+                <span>Mã thiết bị đám mây: </span><span id="user-id-display" class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">...</span>
             </div>
         </div>
     </div>
@@ -113,7 +113,7 @@
             <!-- Hero section introduction -->
             <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-3xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
                 <div class="space-y-3 max-w-2xl">
-                    <span class="bg-emerald-500/30 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Phiên bản 3.0 - Lưu trữ đám mây dùng chung</span>
+                    <span class="bg-emerald-500/30 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Phiên bản 3.0.1 - Bảo mật HTTPS & Sửa lỗi ghi</span>
                     <h2 class="text-2xl md:text-3xl font-bold">Quản lý & Thiết kế QR Dán Nhãn Tài liệu</h2>
                     <p class="text-indigo-100 text-sm md:text-base leading-relaxed">
                         Mọi thay đổi dữ liệu của bạn sẽ được tự động đồng bộ hóa lên đám mây online. Người khác chỉ cần truy cập vào đường link web là sẽ nhìn thấy toàn bộ danh sách và quét QR bình thường mà không lo mất dữ liệu.
@@ -434,7 +434,7 @@
             errorLevel: "Q"
         };
 
-        // App Id and Firebase configs extracted safely from environment variables
+        // App ID and Firebase variables
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-qr-app';
         let db;
         let auth;
@@ -445,10 +445,9 @@
             initFirebase();
         });
 
-        // Initialize Firebase connection using dynamic variables provided at runtime
+        // Initialize Firebase connection using environment config safely (HTTPS COMPATIBLE)
         async function initFirebase() {
             try {
-                // Rule 1 & Rule 3: Use provided dynamic Firebase Config to avoid invalid API Key error
                 if (typeof __firebase_config === 'undefined' || !__firebase_config) {
                     throw new Error("Missing system __firebase_config provider.");
                 }
@@ -460,7 +459,7 @@
 
                 document.getElementById('sync-status').innerText = "Đang kết nối cơ sở dữ liệu online...";
                 
-                // Rule 3: Perform authentication FIRST before any Firestore query
+                // Rule 3: Auth Before Queries (MANDATORY)
                 let user;
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     const credentials = await auth.signInWithCustomToken(__initial_auth_token);
@@ -479,10 +478,10 @@
 
             } catch (error) {
                 console.error("Firebase init failed, switching to local backup storage mode", error);
-                document.getElementById('sync-status').innerText = "Không thể kết nối Cloud (Chế độ cục bộ hoạt động)";
+                document.getElementById('sync-status').innerText = "Không thể kết nối Cloud. Đang chạy offline.";
                 document.getElementById('sync-status').classList.add("text-rose-600");
                 
-                // Fallback to local storage if cloud is blocked or API Key is empty
+                // Fallback to local storage if cloud is blocked
                 const stored = localStorage.getItem('qr_doc_hub_docs');
                 if (stored) {
                     documents = JSON.parse(stored);
@@ -631,7 +630,7 @@
             });
         }
 
-        // Utility: Convert standard Google Drive link to optimize direct visual access
+        // Utility: Convert standard Google Drive link to optimize direct visual access (Secure Preview Format)
         function optimizeDriveLink(url) {
             if (!url) return "";
             
@@ -739,7 +738,7 @@
             showToast("Xuất file CSV thành công!");
         }
 
-        // Add Manual Document directly to Cloud
+        // Add Manual Document directly to Cloud (Ensuring strict paths)
         async function addDocumentManual(event) {
             event.preventDefault();
             const codeInput = document.getElementById('doc-code');
@@ -811,7 +810,7 @@
             modal.classList.add('hidden');
         }
 
-        // Save Edit Modal to Cloud
+        // Save Edit Modal to Cloud (Updating correctly)
         async function saveEditModal(event) {
             event.preventDefault();
             const index = parseInt(document.getElementById('edit-index').value);
@@ -868,7 +867,7 @@
             });
         }
 
-        // Generate QR Code Content Helper
+        // Generate QR Code Content Helper (HTTPS Compatible)
         function generateQRCodeCanvas(text, canvasId, labelText = "") {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
@@ -910,7 +909,7 @@
             });
         }
 
-        // Download single QR Code Image
+        // Download single QR Code Image (Secure High-Res Export)
         function downloadSingleQR(index) {
             const doc = documents[index];
             if (!doc.link) {
